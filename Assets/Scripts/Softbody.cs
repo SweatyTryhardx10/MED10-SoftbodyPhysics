@@ -221,8 +221,8 @@ public class Softbody : MonoBehaviour
         {
             particles.Add(i, new Particle()
             {
-                position = transform.position + meshData.vertices[i],    // Initial position is vertex position
-                velocity = Vector3.zero,            // No initial velocity
+                position = transform.position + softMesh.vertices[i],   // Initial position is vertex position
+                velocity = Vector3.zero,                                // No initial velocity
                 mass = mass / meshData.vertices.Length
             });
         }

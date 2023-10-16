@@ -80,7 +80,7 @@ public static class MeshUtil
 
             int depth = 1;
             while (neighbourQueue.Count > 0)
-            {   
+            {
                 // Stop loop if target distance has been reached
                 if (depth > distance)
                     break;
@@ -118,7 +118,7 @@ public static class MeshUtil
                 // Iterate depth
                 depth++;
             }
-            
+
             return neighbourOutput.ToArray();
         }
     }
@@ -208,6 +208,58 @@ public static class MeshUtil
         return new MeshData() { vertices = vertices, triangles = cube.triangles };
     }
 
+    public static Tetrahedron[] MeshToTetrahedrons(Mesh mesh, out Node[] globalNodes)
+    {
+        return MeshToTetrahedrons(mesh, Vector3.zero, out globalNodes);
+    }
+
+    public static Tetrahedron[] MeshToTetrahedrons(Mesh mesh, Vector3 offset, out Node[] globalNodes)
+    {
+        // Retrieve mesh data (vertices and triangles)
+        Vector3[] vertices = mesh.vertices;
+        int[] quadIndices = mesh.GetTriangles(0);
+        
+        // Create global node array
+        globalNodes = new Node[vertices.Length];
+        for (int i = 0; i < globalNodes.Length; i++)    // One node per vertex
+        {
+            globalNodes[i] = new Node(i, offset + vertices[i]);
+        }
+
+        // Make tetrahedrons from mesh
+        Tetrahedron[] tets = new Tetrahedron[quadIndices.Length / 6];
+        for (int i = 0; i < quadIndices.Length / 6; i++)
+        {
+            // Find the 4 unique vertex indices among the 6 indices from the triangles
+            int[] vertUIDs = new int[4] { -1, -1, -1, -1 };   // Unique vertex indices
+            int indicesFound = 0;
+            for (int j = 0; j < 6; j++)
+            {
+                int index = quadIndices[i * 6 + j];
+                if (!vertUIDs.Contains(index))
+                {
+                    vertUIDs[indicesFound] = index;
+                    indicesFound++;
+                }
+            }
+
+            // 'Add' tetrahedron to list
+            // TODO: Initialize a global node array. These nodes should then be used in the creation of new tetrahedrons!
+            tets[i] = new Tetrahedron(
+                globalNodes[vertUIDs[0]],
+                globalNodes[vertUIDs[1]],
+                globalNodes[vertUIDs[2]],
+                globalNodes[vertUIDs[3]]
+            );
+        }
+
+        return tets;
+    }
+
+
+    // ===========================
+    // ==== EXTENSION METHODS ====
+    // ===========================
     public static Vector3[] ValueOffset(this Vector3[] array, Vector3 offset)
     {
         Vector3[] offsetArray = new Vector3[array.Length];
@@ -228,5 +280,29 @@ public static class MeshUtil
         }
 
         return offsetArray;
+    }
+
+    public static Color WithAlpha(this Color color, float alpha)
+    {
+        return new Color(color.r, color.g, color.b, alpha);
+    }
+
+    public static void TetrahedronHandle(Tetrahedron tet, Color color)
+    {
+        UnityEditor.Handles.color = color;
+        for (int i = 0; i < 4; i++)
+        {
+            int i0 = ((byte)(i + 1)).GetBit(3) ? 1 : 0;
+            int i1 = 1 + (i + 0) % 3;
+            int i2 = 1 + (i + 1) % 3;
+
+            Vector3[] triangle = new Vector3[] {
+                tet.nodes[i0].pos,
+                tet.nodes[i1].pos,
+                tet.nodes[i2].pos
+            };
+
+            UnityEditor.Handles.DrawAAConvexPolygon(triangle);
+        }
     }
 }
