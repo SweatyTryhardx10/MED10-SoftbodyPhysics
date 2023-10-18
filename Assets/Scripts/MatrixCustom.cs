@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -16,15 +17,17 @@ public struct MatrixCustom
     public MatrixCustom(int columns, int rows, params float[] values)
     {
         // Set size
-        this.rows = rows;
         this.columns = columns;
+        this.rows = rows;
 
-        matrix = new float[rows, columns];
-        for (int i = 0; i < columns; i++)
+        matrix = new float[columns, rows];
+        for (int r = 0; r < rows; r++)
         {
-            for (int j = 0; j < rows; j++)
+            for (int c = 0; c < columns; c++)
             {
-                matrix[i, j] = values[i * columns + j];
+                int valueIdx = r * columns + c;
+                if (valueIdx < values.Length)
+                    matrix[c, r] = values[valueIdx];
             }
         }
     }
@@ -74,8 +77,8 @@ public struct MatrixCustom
     /// <summary>
     /// Retrieves a floating-point value from the matrix.
     /// </summary>
-    /// <param name="x">The row index in the matrix.</param>
-    /// <param name="y">The column index in the matrix.</param>
+    /// <param name="x">The column index in the matrix.</param>
+    /// <param name="y">The row index in the matrix.</param>
     /// <returns>A float from this matrix.</returns>
     public float this[int x, int y]
     {
@@ -104,12 +107,23 @@ public struct MatrixCustom
 
     // }
 
+    /// <summary>
+    /// Returns the transpose of this matrix (the matrix flipped on its diagonal).
+    /// </summary>
     public MatrixCustom transpose
     {
         get
         {
-            // TODO: Implement transpose short-hand
-            return new MatrixCustom();
+            MatrixCustom result = new MatrixCustom(rows, columns);
+            for (int c = 0; c < columns; c++)
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    result[r, c] = this[c, r];
+                }
+            }
+            
+            return result;
         }
     }
 
@@ -122,6 +136,11 @@ public struct MatrixCustom
         }
     }
 
+    /// <summary>
+    /// Returns the determinant of a square matrix<br />
+    /// NOTE: If the matrix is not square, this will output -1.<br />
+    /// DEVELOPE NOTE: Not yet implemented as this becomes computationally infeasable for larger matrices!
+    /// </summary>
     public float determinant
     {
         get
@@ -151,14 +170,8 @@ public struct MatrixCustom
 
     public bool isSquare { get => (rows == columns); }
 
-    public static MatrixCustom operator *(MatrixCustom m1, MatrixCustom m2)
-    {
-        // TODO: Implement matrix multiplication for arbitrary matrix sizes
-        return new MatrixCustom();
-    }
-
     /// <summary>
-    /// Computes the inverse of this matrix via a Conjugate Gradient Descent solver.
+    /// Computes the inverse of this matrix via a Conjugate Gradient Descent solver. (Right???)
     /// </summary>
     /// <returns>The resulting inverse of this matrix.</returns>
     public MatrixCustom GetInverseCGD()
@@ -166,15 +179,63 @@ public struct MatrixCustom
         return new MatrixCustom();
     }
 
+    public static MatrixCustom operator *(MatrixCustom m1, MatrixCustom m2)
+    {
+        // 1. The number of columns of the 1st matrix must equal the number of rows of the 2nd matrix.
+        // 2. And the result will have the same number of rows as the 1st matrix, and the same number of columns as the 2nd matrix.
+
+        if (m1.columns != m2.rows)
+            throw new ArithmeticException("The column count of the 1st matrix is not the same as the row count of the 2nd matrix. Matrix multiplication is invalid!");
+
+        MatrixCustom result = new MatrixCustom(m2.columns, m1.rows);
+        for (int r = 0; r < m1.rows; r++)   // Go through each row in the 1st matrix
+        {
+            for (int c = 0; c < m2.columns; c++)    // Go through each column in the 2nd matrix
+            {
+                // Multiply column and row together component-wise (like a dot-operation)
+                // ...and then use the sum as the resulting matrix's component
+                float componentResult = 0f;
+                for (int i = 0; i < m2.rows; i++)
+                {
+                    componentResult += m1[i, r] * m2[c, i];
+                }
+                result[c, r] = componentResult;
+            }
+        }
+
+        return result;
+    }
     public static MatrixCustom operator *(MatrixCustom m1, float scalar)
     {
-        // TODO: Implement scalar multiplication
-        return m1;
+        // NOTE: Can the parameter be modified directly (because it's a struct) to save on memory?
+
+        MatrixCustom result = new MatrixCustom(m1.columns, m1.rows);
+
+        for (int c = 0; c < m1.columns; c++)
+        {
+            for (int r = 0; r < m1.rows; r++)
+            {
+                result[c, r] = m1[c, r] * scalar;
+            }
+        }
+
+        return result;
     }
     public static MatrixCustom operator *(float scalar, MatrixCustom m1)
     {
-        // TODO: Implement scalar multiplication
-        return m1;
+        // NOTE: Can the parameter be modified directly (because it's a struct) to save on memory?
+
+        MatrixCustom result = new MatrixCustom(m1.columns, m1.rows);
+
+        for (int c = 0; c < m1.columns; c++)
+        {
+            for (int r = 0; r < m1.rows; r++)
+            {
+                result[c, r] = m1[c, r] * scalar;
+            }
+        }
+
+        return result;
     }
     public static Vector3[] operator *(MatrixCustom m1, Vector3[] vector)
     {
@@ -186,8 +247,19 @@ public struct MatrixCustom
     }
     public static MatrixCustom operator /(MatrixCustom m1, float divider)
     {
-        // TODO: Implement scalar division
-        return m1;
+        // NOTE: Can the parameter be modified directly (because it's a struct) to save on memory?
+
+        MatrixCustom result = new MatrixCustom(m1.columns, m1.rows);
+
+        for (int c = 0; c < m1.columns; c++)
+        {
+            for (int r = 0; r < m1.rows; r++)
+            {
+                result[c, r] = m1[c, r] / divider;
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -199,5 +271,27 @@ public struct MatrixCustom
     {
         // TODO: Implement diagonal matrix constructor
         return new MatrixCustom();
+    }
+
+    public override string ToString()
+    {
+        string output = "\nMatrix:\n";
+
+        for (int r = 0; r < rows; r++)
+        {
+            output += "[";
+            for (int c = 0; c < columns; c++)
+            {
+                output += this[c, r].ToString(CultureInfo.InvariantCulture);
+                if (c < columns - 1)
+                    output += "  ";
+            }
+            output += "]";
+
+            if (r < rows - 1)
+                output += '\n';
+        }
+
+        return output;
     }
 }

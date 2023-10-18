@@ -32,43 +32,66 @@ public class SoftbodyFEM : MonoBehaviour
         elements = MeshUtil.MeshToTetrahedrons(femMesh, transform.position, out globalNodes);
     }
 
+    private void Start()
+    {
+        // DEBUG DEBUG DEBUG
+        // MatrixCustom m1 = new MatrixCustom(4, 4,
+        //     4f, 2f, 1f, -6f,
+        //     1f, 8f, 1f, 16f,
+        //     2f, 78f, 2f, 8f,
+        //     45f, 100f, 6f, -1f
+        // );
+        // MatrixCustom m2 = new MatrixCustom(2, 4,
+        //     11f, -12f,
+        //     2f, 3.5f,
+        //     1f, 5f,
+        //     120f, 17f
+        // );
+
+        // Debug.Log(m1);
+        // Debug.Log(m1.transpose);
+        // Debug.Log(m2);
+        // Debug.Log(m2.transpose);
+        // Debug.Log(m1 * m2);
+    }
+
     private void FixedUpdate()
     {
         // TODO: Solve Finite Element Method (FEM)-based softbody mechanics
         SolveElements();
-        
+
         // TODO: Update the mesh coupled to the system
     }
 
     private void SolveElements()
     {
-        
+
         // TODO: Assemble global stiffness matrix
         MatrixCustom K = new MatrixCustom();
-        
+
         // Damping matrix (IGNORE FOR NOW)
         MatrixCustom C = new MatrixCustom();
-        
+
         // Mass matrix (lumped) (ALSO - IGNORE FOR NOW)
         MatrixCustom M = new MatrixCustom();
-        
-        
+
+
         // TODO: 'Compute' the force vector for the global system
         Vector3[] globalForceVector = new Vector3[globalNodes.Length];
-        
+
         // TODO: Solve for next-frame velocity (using conjugate gradient solver - damn)
         Vector3[] vNext = new Vector3[0];
-        
+
         // Global displacement vector
         Vector3[] u = K.inverse * globalForceVector;
-        
+
         // TODO: Update the positions for all global nodes
         for (int i = 0; i < elements.Length; i++)
         {
             for (int j = 0; j < 4; j++)
             {
                 int nodeID = elements[i].nodes[j].globalID;
-                
+
                 // Add displacement to node position
                 elements[i].nodes[j].pos += u[nodeID];
             }
