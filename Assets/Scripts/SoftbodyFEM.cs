@@ -65,25 +65,42 @@ public class SoftbodyFEM : MonoBehaviour
 
     private void SolveElements()
     {
+        // Compute stiffness matrices for all elements
+        for (int i = 0; i < elements.Length; i++)
+        {
+            elements[i].ComputeStiffnessMatrix();
+        }
 
         // TODO: Assemble global stiffness matrix
-        MatrixCustom K = new MatrixCustom();
+        MatrixCustom K = new MatrixCustom(globalNodes.Length, globalNodes.Length);
+        // TODO: 'Compute' the force vector for the global system
+        Vector3[] globalForceVector = new Vector3[globalNodes.Length];
+        foreach (Tetrahedron t in elements)
+        {
+            for (int m = 0; m < t.nodes.Length; m++)
+            {
+                for (int n = 0; n < t.nodes.Length; n++)
+                {
+                    K[t.nodes[n].globalID, t.nodes[m].globalID] += t.stiffnessMatrix[n, m];
+                }
+
+                globalForceVector[t.nodes[m].globalID] += t.forceVector[m];
+            }
+        }
+
+        // Mass matrix (lumped) (ALSO - IGNORE FOR NOW)
+        MatrixCustom M = MatrixCustom.Diagonal(globalNodes.Length, 1f);
 
         // Damping matrix (IGNORE FOR NOW)
         MatrixCustom C = new MatrixCustom();
-
-        // Mass matrix (lumped) (ALSO - IGNORE FOR NOW)
-        MatrixCustom M = new MatrixCustom();
-
-
-        // TODO: 'Compute' the force vector for the global system
-        Vector3[] globalForceVector = new Vector3[globalNodes.Length];
 
         // TODO: Solve for next-frame velocity (using conjugate gradient solver - damn)
         Vector3[] vNext = new Vector3[0];
 
         // Global displacement vector
-        Vector3[] u = K.inverse * globalForceVector;
+        Vector3[] u = MatrixCustom.MatrixToVector3(
+                        MatrixCustom.CGDSolver(K, MatrixCustom.Vector3ToMatrix(globalForceVector), MatrixCustom.Column(globalNodes.Length * 3)
+                    ));
 
         // TODO: Update the positions for all global nodes
         for (int i = 0; i < elements.Length; i++)

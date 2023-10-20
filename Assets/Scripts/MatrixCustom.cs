@@ -122,7 +122,7 @@ public struct MatrixCustom
                     result[r, c] = this[c, r];
                 }
             }
-            
+
             return result;
         }
     }
@@ -171,14 +171,71 @@ public struct MatrixCustom
     public bool isSquare { get => (rows == columns); }
 
     /// <summary>
-    /// Computes the inverse of this matrix via a Conjugate Gradient Descent solver. (Right???)
+    /// Computes the inverse of matrix A via a Conjugate Gradient Descent solver. (Right???)
     /// </summary>
-    /// <returns>The resulting inverse of this matrix.</returns>
-    public MatrixCustom GetInverseCGD()
+    /// <param name="A">The symmetric, positive-definite matrix.</param>
+    /// <param name="b">A column-vector.</param>
+    /// <param name="x">Initial guess for column-vector solution?</param>
+    /// <returns>The correct value for the column-vector, x.</returns>
+    public static MatrixCustom CGDSolver(MatrixCustom A, MatrixCustom b, MatrixCustom x)
     {
-        return new MatrixCustom();
+        // Variables:
+        //  A = Matrix to be solved (the global stiffness matrix)
+        //  b = A column-vector (the global force vector)
+        //  r = A column-vector (the global displacement vector)
+
+        // TODO: Check eligibility of matrix-inversion operation (matrix must be symmetric, positive-definite)
+
+        MatrixCustom dir = b - A * x;   //???
+        MatrixCustom residual = dir;
+
+        for (int i = 0; i < b.rows; i++)
+        {
+            float alpha = ColumnRowMult(x, x.transpose) / ColumnRowMult(dir.transpose * A, dir);                           // Step-size???
+            MatrixCustom xNew = x + alpha * dir;
+            MatrixCustom residualNew = residual - alpha * A * dir;
+            float beta = ColumnRowMult(residualNew, residualNew.transpose) / ColumnRowMult(residual, residual.transpose);   // ???
+
+            dir = residualNew + beta * dir;
+
+            x = xNew;
+            residual = residualNew;
+        }
+
+        return x;
     }
 
+
+    public static MatrixCustom operator +(MatrixCustom m1, MatrixCustom m2)
+    {
+        // TODO: This operator should maybe return a warning whenever the matrices don't reciprocate their size
+        int minRows = Mathf.Min(m1.rows, m2.rows);
+        int minColumns = Mathf.Min(m1.columns, m2.columns);
+
+        MatrixCustom result = m1;
+        for (int r = 0; r < minRows; r++)
+        {
+            for (int c = 0; c < minColumns; c++)
+            {
+                result[c, r] += m2[c, r];
+            }
+        }
+
+        return result;
+    }
+    public static MatrixCustom operator -(MatrixCustom m1, MatrixCustom m2)
+    {
+        MatrixCustom result = m1;
+        for (int r = 0; r < m1.rows; r++)
+        {
+            for (int c = 0; c < m1.columns; c++)
+            {
+                result[c, r] -= m2[c, r];
+            }
+        }
+
+        return result;
+    }
     public static MatrixCustom operator *(MatrixCustom m1, MatrixCustom m2)
     {
         // 1. The number of columns of the 1st matrix must equal the number of rows of the 2nd matrix.
@@ -263,14 +320,121 @@ public struct MatrixCustom
     }
 
     /// <summary>
+    /// Multiplies a column and row vector together which yields a single number.
+    /// </summary>
+    /// <param name="rowMatrix">A row matrix (must be as long as the other matrix).</param>
+    /// <param name="columnMatrix">A column matrix (must be as long as the other matrix).</param>
+    /// <returns>The product from a dot-like operation between the two matrices.</returns>
+    public static float ColumnRowMult(MatrixCustom rowMatrix, MatrixCustom columnMatrix)
+    {
+        if (rowMatrix.columns != columnMatrix.rows)
+            throw new ArithmeticException($"The row and column matrix do not share opposite dimensions (Row-length: {rowMatrix.columns}, Column-length: {columnMatrix.rows})");
+
+        float result = 0f;
+
+        for (int i = 0; i < rowMatrix.columns; i++)
+        {
+            result += rowMatrix[i, 0] * columnMatrix[0, i];
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Produces an empty column-vector with zeroes.
+    /// </summary>
+    /// <param name="length">The length of the column.</param>
+    /// <returns>The column-vector.</returns>
+    public static MatrixCustom Column(int length)
+    {
+        return new MatrixCustom(1, length);
+    }
+    /// <summary>
+    /// Produces a column-vector whose column contains the input values.
+    /// </summary>
+    /// <returns>The column-vector.</returns>
+    public static MatrixCustom Column(params float[] values)
+    {
+        return new MatrixCustom(1, values.Length, values);
+    }
+
+    /// <summary>
+    /// Produces an empty row-vector with zeroes.
+    /// </summary>
+    /// <param name="length">The length of the row.</param>
+    /// <returns>The row-vector.</returns>
+    public static MatrixCustom Row(int length)
+    {
+        return new MatrixCustom(length, 1);
+    }
+    /// <summary>
+    /// Produces a row-vector whose row contains the input values.
+    /// </summary>
+    /// <returns>The row-vector.</returns>
+    public static MatrixCustom Row(params float[] values)
+    {
+        return new MatrixCustom(values.Length, 1, values);
+    }
+
+    /// <summary>
     /// Produces a square matrix whose diagonal contains the input values.
     /// </summary>
     /// <param name="values">The values on the diagonal from 11 to nn.</param>
-    /// <returns></returns>
+    /// <returns>The diagonal matrix.</returns>
     public static MatrixCustom Diagonal(params float[] values)
     {
         // TODO: Implement diagonal matrix constructor
         return new MatrixCustom();
+    }
+    /// <summary>
+    /// Produces a square matrix whose diagonal contains the input values.
+    /// </summary>
+    /// <param name="size">The size (n-by-n) of the matrix.</param>
+    /// <param name="value">The value on the diagonal.</param>
+    /// <returns>The diagonal matrix</returns>
+    public static MatrixCustom Diagonal(int size, float value)
+    {
+        // TODO: Implement diagonal matrix constructor
+        return new MatrixCustom();
+    }
+
+    /// <summary>
+    /// Converts a Vector3-array to a row-matrix on the form (x,y,z,x,y,z,x...).
+    /// </summary>
+    /// <returns>The row-matrix.</returns>
+    public static MatrixCustom Vector3ToMatrix(Vector3[] input)
+    {
+        MatrixCustom result = new MatrixCustom(input.Length * 3, 1);
+        for (int v = 0; v < input.Length; v++)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                result[v * 3 + i, 0] = input[v][i];
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Converts a row-matrix, on the form (x,y,z,x,y,z,x...), to an array of Vector3's on the form (|x y z|, |x y z|...).
+    /// </summary>
+    /// <param name="row">The row-matrix (if you have a column-matrix, just transpose it).</param>
+    /// <returns>The Vector3-array.</returns>
+    public static Vector3[] MatrixToVector3(MatrixCustom row)
+    {
+        if (row.columns % 3 != 0)
+            throw new FormatException("The length of the row-matrix is not a multiple of 3. The conversion cannot take place.");
+
+        Vector3[] result = new Vector3[row.columns / 3];
+        for (int i = 0; i < row.columns / 3; i++)
+        {
+            result[i].x = row[i * 3 + 0, 0];
+            result[i].y = row[i * 3 + 1, 0];
+            result[i].z = row[i * 3 + 2, 0];
+        }
+
+        return result;
     }
 
     public override string ToString()

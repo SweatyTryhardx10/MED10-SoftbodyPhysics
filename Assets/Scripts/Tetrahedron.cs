@@ -29,6 +29,8 @@ public class Tetrahedron
     public MatrixCustom stiffnessMatrix { get; private set; }   // Check literature for size and computation
     public MatrixCustom lumpedMassMatrix { get; private set; }  // Check literature for size and computation
 
+    public Vector3[] forceVector { get; private set; }
+
     public Matrix4x4 orientation { get; private set; }          // Check literature for size and computation
 
     public float massDensity;
@@ -55,7 +57,7 @@ public class Tetrahedron
         barycentricWeights = new float[4];
     }
 
-    private void ComputeStiffnessMatrix()
+    public void ComputeStiffnessMatrix()
     {
         // TODO: Compute stiffness matrix
         // Element stiffness matrix (Ke):
