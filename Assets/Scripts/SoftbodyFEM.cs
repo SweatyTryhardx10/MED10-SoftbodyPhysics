@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
+using System.Linq;
 
 public class SoftbodyFEM : MonoBehaviour
 {
@@ -72,19 +73,32 @@ public class SoftbodyFEM : MonoBehaviour
         }
 
         // TODO: Assemble global stiffness matrix
-        MatrixCustom K = new MatrixCustom(globalNodes.Length, globalNodes.Length);
         // TODO: 'Compute' the force vector for the global system
+        // TODO: FIX THIS STIFFNESS ASSEMBLY PROCESS. WRONG DIMENSIONS ARE PRODUCED BECAUSE EACH ELEMENT STIFFNESS MATRIX IS NOT UTILIZED IN ITS ENTIRETY!
+        MatrixCustom K = new MatrixCustom(globalNodes.Length * 3, globalNodes.Length * 3);
         Vector3[] globalForceVector = new Vector3[globalNodes.Length];
+        
+        // Debug.Log($"K Size: [{K.columns}, {K.rows}] \nKe Size: [{elements[0].stiffnessMatrix.columns}, {elements[0].stiffnessMatrix.rows}]");
         foreach (Tetrahedron t in elements)
         {
             for (int m = 0; m < t.nodes.Length; m++)
             {
                 for (int n = 0; n < t.nodes.Length; n++)
                 {
-                    K[t.nodes[n].globalID, t.nodes[m].globalID] += t.stiffnessMatrix[n, m];
+                    // NOTE: This must be a matrix addition!... not a component addition.
+                    // K[t.nodes[n].globalID, t.nodes[m].globalID] += t.stiffnessMatrix[n, m];
+                    for (int c = 0; c < 3; c++)
+                    {
+                        for (int r = 0; r < 3; r++)
+                        {
+                            // This nested-loop is a component-wise addition of two 3x3 submatrices (element matrix is 12x12)
+                            K[t.nodes[n].globalID * 3 + c, t.nodes[m].globalID * 3 + r] += t.stiffnessMatrix[n * 3 + c, m * 3 + r];
+                        }
+                    }
                 }
 
-                globalForceVector[t.nodes[m].globalID] += t.forceVector[m];
+                // globalForceVector[t.nodes[m].globalID] += t.forceVector[m];
+                globalForceVector[t.nodes[m].globalID] += new Vector3(Mathf.Sin(Time.time), Time.time, Mathf.Cos(Time.time));   // FORCE VECTOR EFFECT TESTING
             }
         }
 
@@ -98,9 +112,11 @@ public class SoftbodyFEM : MonoBehaviour
         Vector3[] vNext = new Vector3[0];
 
         // Global displacement vector
-        Vector3[] u = MatrixCustom.MatrixToVector3(
-                        MatrixCustom.CGDSolver(K, MatrixCustom.Vector3ToMatrix(globalForceVector), MatrixCustom.Column(globalNodes.Length * 3)
-                    ));
+        MatrixCustom initGuess = MatrixCustom.Column(globalNodes.Length * 3, 3f);
+        Vector3[] u = MatrixCustom.LinearMatrixToVector3(
+                        MatrixCustom.CGDSolver(K, MatrixCustom.Vector3ToLinearMatrix(globalForceVector).transpose, initGuess
+                    ).transpose);
+        Debug.Log($"Guess: {initGuess}\nResult: {MatrixCustom.Vector3ToRowMatrix(u)}");
 
         // TODO: Update the positions for all global nodes
         for (int i = 0; i < elements.Length; i++)
@@ -110,7 +126,10 @@ public class SoftbodyFEM : MonoBehaviour
                 int nodeID = elements[i].nodes[j].globalID;
 
                 // Add displacement to node position
-                elements[i].nodes[j].pos += u[nodeID];
+                elements[i].nodes[j].pos += u[nodeID] * Time.fixedDeltaTime;
+                
+                if (i == 0 && j == 0 && Time.frameCount % 60 == 0)
+                    Debug.Log($"Node 0 pos: {elements[i].nodes[j].pos}");
             }
         }
     }
@@ -129,8 +148,8 @@ public class SoftbodyFEM : MonoBehaviour
                 {
                     if (i == tetHighlight)
                         continue;
-                    if (i % 10 != 0)
-                        continue;
+                    // if (i % 10 != 0)
+                    //     continue;
 
                     MeshUtil.TetrahedronHandle(elements[i], Color.HSVToRGB((i / 512f) % 1f, 1f, 1f).WithAlpha(0.3f));
                 }
@@ -144,5 +163,11 @@ public class SoftbodyFEM : MonoBehaviour
         {
 
         }
+    }
+
+    [ContextMenu("Debug Tet Count")]
+    private void LogDebugStats()
+    {
+        Debug.Log("Tetrahedron Count: " + elements.Length);
     }
 }

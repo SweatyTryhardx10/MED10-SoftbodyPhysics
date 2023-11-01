@@ -85,18 +85,18 @@ public struct MatrixCustom
         get
         {
             if (x >= columns)
-                throw new IndexOutOfRangeException($"index {x} is larger than {this}'s column count");
+                throw new IndexOutOfRangeException($"index {x} is larger than the matrix's column count");
             if (y >= rows)
-                throw new IndexOutOfRangeException($"index {y} is larger than {this}'s row count");
+                throw new IndexOutOfRangeException($"index {y} is larger than the matrix's row count");
 
             return matrix[x, y];
         }
         set
         {
             if (x >= columns)
-                throw new IndexOutOfRangeException($"index {x} is larger than {this}'s column count");
+                throw new IndexOutOfRangeException($"index {x} is larger than the matrix's column count");
             if (y >= rows)
-                throw new IndexOutOfRangeException($"index {y} is larger than {this}'s row count");
+                throw new IndexOutOfRangeException($"index {y} is larger than the matrix's row count");
 
             matrix[x, y] = value;
         }
@@ -180,26 +180,25 @@ public struct MatrixCustom
     public static MatrixCustom CGDSolver(MatrixCustom A, MatrixCustom b, MatrixCustom x)
     {
         // Variables:
-        //  A = Matrix to be solved (the global stiffness matrix)
+        //  A = Symmetric, positive-definite matrix (the global stiffness matrix)
         //  b = A column-vector (the global force vector)
         //  r = A column-vector (the global displacement vector)
 
-        // TODO: Check eligibility of matrix-inversion operation (matrix must be symmetric, positive-definite)
+        // TODO: Check eligibility of Conjugate Gradient operation (matrix must be symmetric, positive-definite)
 
-        MatrixCustom dir = b - A * x;   //???
+        MatrixCustom dir = b - A * x;
         MatrixCustom residual = dir;
-
-        for (int i = 0; i < b.rows; i++)
+        
+        int iter = Mathf.Min(b.rows, 20);
+        for (int i = 0; i < iter; i++)
         {
-            float alpha = ColumnRowMult(x, x.transpose) / ColumnRowMult(dir.transpose * A, dir);                           // Step-size???
-            MatrixCustom xNew = x + alpha * dir;
-            MatrixCustom residualNew = residual - alpha * A * dir;
-            float beta = ColumnRowMult(residualNew, residualNew.transpose) / ColumnRowMult(residual, residual.transpose);   // ???
-
-            dir = residualNew + beta * dir;
-
-            x = xNew;
-            residual = residualNew;
+            float alpha = ColumnRowMult(x.transpose, x) / ColumnRowMult(dir.transpose * A, dir);
+            MatrixCustom newX = x + alpha * dir;
+            MatrixCustom newResidual = residual - alpha * A * dir;
+            float beta = ColumnRowMult(newResidual.transpose, newResidual) / ColumnRowMult(residual.transpose, residual);
+            dir = newResidual + beta * dir;
+            x = newX;
+            residual = newResidual;
         }
 
         return x;
@@ -225,12 +224,12 @@ public struct MatrixCustom
     }
     public static MatrixCustom operator -(MatrixCustom m1, MatrixCustom m2)
     {
-        MatrixCustom result = m1;
+        MatrixCustom result = new MatrixCustom(m1.columns, m1.rows);
         for (int r = 0; r < m1.rows; r++)
         {
             for (int c = 0; c < m1.columns; c++)
             {
-                result[c, r] -= m2[c, r];
+                result[c, r] = m1[c, r] - m2[c, r];
             }
         }
 
@@ -319,6 +318,99 @@ public struct MatrixCustom
         return result;
     }
 
+    public enum ConcMethod
+    {
+        /// <summary>Concatenates the columns of each matrix such that each matrix is part of a single block-row</summary>
+        MakeRow,
+        /// <summary>Concatenates the rows of each matrix such that each matrix is part of a single block-column</summary>
+        MakeColumn
+    }
+    public static MatrixCustom Concatenate(ConcMethod method, MatrixCustom m1, MatrixCustom m2)
+    {
+        MatrixCustom result;
+        switch (method)
+        {
+            case ConcMethod.MakeRow:
+                // TODO: Validate matrix dimensions for this operation.
+                result = new MatrixCustom(m1.columns + m2.columns, m1.rows);
+                for (int c = 0; c < m1.columns; c++)    // Set m1-sourced values
+                {
+                    for (int r = 0; r < m1.rows; r++)
+                    {
+                        result[c, r] = m1[c, r];
+                    }
+                }
+                for (int c = 0; c < m2.columns; c++)    // Set m2-sourced values
+                {
+                    for (int r = 0; r < m1.rows; r++)
+                    {
+                        result[m1.columns + c, r] = m2[c, r];
+                    }
+                }
+                break;
+            case ConcMethod.MakeColumn:
+                // TODO: Validate matrix dimensions for this operation.
+                result = new MatrixCustom(m1.columns, m1.rows + m2.rows);
+                break;
+
+            default:
+                result = new MatrixCustom();    // Empty matrix
+                break;
+        }
+
+        return result;
+    }
+    public static MatrixCustom Concatenate(ConcMethod method, MatrixCustom mSource, params MatrixCustom[] mOthers)
+    {
+        MatrixCustom result;
+        switch (method)
+        {
+            case ConcMethod.MakeRow:
+                // TODO: Validate matrix dimensions for this operation.
+
+                // Evaluate new column-count
+                int columns = mSource.columns;
+                int rows = mSource.rows;
+                for (int i = 0; i < mOthers.Length; i++)
+                {
+                    columns += mOthers[i].columns;
+                }
+
+                result = new MatrixCustom(columns, rows);
+                for (int c = 0; c < mSource.columns; c++)
+                {
+                    for (int r = 0; r < mSource.rows; r++)
+                    {
+                        result[c, r] = mSource[c, r];
+                    }
+                }
+                int columnSelector = mSource.columns;
+                for (int m = 0; m < mOthers.Length; m++)    // Set m1-sourced values
+                {
+                    for (int c = 0; c < mOthers[m].columns; c++)
+                    {
+                        for (int r = 0; r < mOthers[m].rows; r++)
+                        {
+                            result[columnSelector + c, r] = mOthers[m][c, r];
+                        }
+                    }
+                    columnSelector += mOthers[m].columns;
+                }
+                break;
+            case ConcMethod.MakeColumn:
+                // TODO: Validate matrix dimensions for this operation.
+                throw new NotImplementedException("The row-based matrix concatenation method has not yet been implemented!");
+                result = new MatrixCustom(mSource.columns, mSource.rows + mOthers[0].rows);
+                break;
+
+            default:
+                result = new MatrixCustom();    // Empty matrix
+                break;
+        }
+
+        return result;
+    }
+
     /// <summary>
     /// Multiplies a column and row vector together which yields a single number.
     /// </summary>
@@ -357,6 +449,21 @@ public struct MatrixCustom
     {
         return new MatrixCustom(1, values.Length, values);
     }
+    /// <summary>
+    /// Produces a column-vector whose column contains the input values.
+    /// </summary>
+    /// <param name="length">The length of the column.</param>
+    /// <param name="value">The value for all the components in the column.</param>
+    /// <returns>The column-vector.</returns>
+    public static MatrixCustom Column(int length, float value)
+    {
+        MatrixCustom output = new MatrixCustom(1, length);
+        for (int i = 0; i < output.rows; i++)
+        {
+            output[0,i] = value;
+        }
+        return output;
+    }
 
     /// <summary>
     /// Produces an empty row-vector with zeroes.
@@ -384,7 +491,12 @@ public struct MatrixCustom
     public static MatrixCustom Diagonal(params float[] values)
     {
         // TODO: Implement diagonal matrix constructor
-        return new MatrixCustom();
+        MatrixCustom result = new MatrixCustom(values.Length, values.Length);
+        for (int i = 0; i < values.Length; i++)
+        {
+            result[i, i] = values[i];
+        }
+        return result;
     }
     /// <summary>
     /// Produces a square matrix whose diagonal contains the input values.
@@ -399,10 +511,27 @@ public struct MatrixCustom
     }
 
     /// <summary>
+    /// Converts a Vector3-array to a row-matrix on the form (v3 | v3 | v3 ...).
+    /// </summary>
+    /// <returns>The stacked row-matrix.</returns>
+    public static MatrixCustom Vector3ToRowMatrix(Vector3[] input)
+    {
+        MatrixCustom result = new MatrixCustom(input.Length, 3);
+        for (int v = 0; v < input.Length; v++)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                result[v, i] = input[v][i];
+            }
+        }
+
+        return result;
+    }
+    /// <summary>
     /// Converts a Vector3-array to a row-matrix on the form (x,y,z,x,y,z,x...).
     /// </summary>
-    /// <returns>The row-matrix.</returns>
-    public static MatrixCustom Vector3ToMatrix(Vector3[] input)
+    /// <returns>The linear row-matrix.</returns>
+    public static MatrixCustom Vector3ToLinearMatrix(Vector3[] input)
     {
         MatrixCustom result = new MatrixCustom(input.Length * 3, 1);
         for (int v = 0; v < input.Length; v++)
@@ -416,30 +545,59 @@ public struct MatrixCustom
         return result;
     }
 
-    /// <summary>
-    /// Converts a row-matrix, on the form (x,y,z,x,y,z,x...), to an array of Vector3's on the form (|x y z|, |x y z|...).
-    /// </summary>
-    /// <param name="row">The row-matrix (if you have a column-matrix, just transpose it).</param>
-    /// <returns>The Vector3-array.</returns>
-    public static Vector3[] MatrixToVector3(MatrixCustom row)
+    public static Vector3[] RowMatrixToVector3(MatrixCustom row)
     {
-        if (row.columns % 3 != 0)
-            throw new FormatException("The length of the row-matrix is not a multiple of 3. The conversion cannot take place.");
+        if (row.rows % 3 != 0)
+            throw new FormatException("The matrix does not have exactly 3 rows. The conversion cannot take place.");
 
-        Vector3[] result = new Vector3[row.columns / 3];
-        for (int i = 0; i < row.columns / 3; i++)
+        Vector3[] result = new Vector3[row.columns];
+        for (int i = 0; i < row.columns; i++)
         {
-            result[i].x = row[i * 3 + 0, 0];
-            result[i].y = row[i * 3 + 1, 0];
-            result[i].z = row[i * 3 + 2, 0];
+            result[i].x = row[i, 0];
+            result[i].y = row[i, 1];
+            result[i].z = row[i, 2];
         }
 
         return result;
     }
 
+    /// <summary>
+    /// Converts a row-matrix, on the form (x,y,z,x,y,z,x...), to an array of Vector3's on the form (|x y z|, |x y z|...).
+    /// </summary>
+    /// <param name="linearRow">The row-matrix (if you have a column-matrix, just transpose it).</param>
+    /// <returns>The Vector3-array.</returns>
+    public static Vector3[] LinearMatrixToVector3(MatrixCustom linearRow)
+    {
+        if (linearRow.columns % 3 != 0)
+            throw new FormatException("The length of the row-matrix is not a multiple of 3. The conversion cannot take place.");
+
+        Vector3[] result = new Vector3[linearRow.columns / 3];
+        for (int i = 0; i < linearRow.columns / 3; i++)
+        {
+            result[i].x = linearRow[i * 3 + 0, 0];
+            result[i].y = linearRow[i * 3 + 1, 0];
+            result[i].z = linearRow[i * 3 + 2, 0];
+        }
+
+        return result;
+    }
+
+    public bool HasNaNs()
+    {
+        for (int c = 0; c < this.columns; c++)
+        {
+            for (int r = 0; r < this.rows; r++)
+            {
+                if (float.IsNaN(this[c, r]))
+                    return true;
+            }
+        }
+        return false;
+    }
+
     public override string ToString()
     {
-        string output = "\nMatrix:\n";
+        string output = "\n";
 
         for (int r = 0; r < rows; r++)
         {
